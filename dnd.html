@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+  <title>Graph 3D demo</title>
+
+  <style>
+    body {font: 10pt arial;}
+  </style>
+
+<!--  <script type="text/javascript" src="http://visjs.org/dist/vis.js"></script> -->
+<script type="text/javascript" src="vis.js"></script> 
+
+  <script type="text/javascript">
+    var data = null;
+    var single_weapon_graph = null;
+    var versus_weapon_graph = null;
+
+    function clamp(x) {
+      x = Math.max(x,0);
+      x = Math.min(x,1);
+      return x;
+    }
+
+    function avg_roll(dice,mod) {
+      var dmg = 0;
+      for (var i = 1; i <= dice; i++) {
+        var roll = Math.max((i+mod),0);
+        //console.log("       --roll " + roll + " side : " + i);
+        dmg += (roll/dice);
+      }
+      return dmg;   
+    }
+
+    // Called when the Visualization API is loaded.
+    function drawVisualization() {
+
+      // Get user options
+      var showPerspective = document.getElementById('perspective').checked;
+      var archery_fs = document.getElementById('archery_fs').checked;
+      var dual_fs = document.getElementById('dual_fs').checked;
+      var scope_z = document.getElementById('scope_z').checked;
+      var single_weapon_type   = document.getElementById('single_weapon_type').value;
+      var versus_weapon_type   = document.getElementById('versus_weapon_type').value;
+
+
+      // Create and populate a data table.
+      data_single = new vis.DataSet();
+      data_versus = new vis.DataSet();
+      var counter = 0;
+      var stepsX = 25;  // number of datapoints will be steps*steps
+      var stepsY = 6;  // number of datapoints will be steps*steps
+
+      for (var x = -3; x < 5; x+=1) {
+          var bow_dmg    = avg_roll(8,x) ;
+          console.log("bow   : average damage with + " + x + "  dex is " + bow_dmg);
+          var dagger_dmg = (dual_fs) ? 2*avg_roll(4,x) : avg_roll(4,x) + avg_roll(4,0);
+          console.log("dagger: average damage with + " + x + "  dex is " + dagger_dmg);
+          var archery_bonus = (archery_fs) ? 2 : 0;
+
+          for (var y = 10; y < 26; y+=1) {
+              var bow_chance    = clamp((20-y+x+archery_bonus+2)/20);     
+              var dagger_chance = clamp((20-y+x+2)/20);
+              var bow_value     = bow_chance*bow_dmg ;
+              var dagger_value  = dagger_chance * dagger_dmg ;
+              { 
+                  var value;
+                  if (single_weapon_type == 'daggers') {
+                    value =  dagger_value;
+                  } else if (single_weapon_type == 'lbow') {
+                    value =  bow_value;
+                  }
+                  data_single.add({id:counter++,x:x,y:y,z:value,style:value});
+              }
+
+              { 
+                  var value;
+                  if (versus_weapon_type == 'diff_dagger_lbow')  {
+                    value =  dagger_value - bow_value;
+                  }
+                  data_versus.add({id:counter++,x:x,y:y,z:value,style:value});
+              }
+          }
+      }
+
+      // specify options
+      var options = {
+        width:  '600px',
+        height: '600px',
+        style: 'surface',
+        showPerspective: showPerspective,
+        showGrid: true,
+        showShadow: false,
+        keepAspectRatio: true,
+        legendLabel: 'expected dmg difference',
+        xLabel : 'ability mod',
+        yLabel : 'AC',
+        zLabel : 'expected dmg difference',
+        tooltip: true, 
+        verticalRatio: 0.5
+      };
+
+      var options_single = options;  
+      var options_versus = options;  
+
+      if (scope_z) {
+        options_versus.zMax = 3.5;
+        options_versus.zMin = -1;
+        options_single.zMax = 10;
+        options_single.zMin = 0;
+      }
+
+      var camera_single = single_weapon_graph ? single_weapon_graph.getCameraPosition() : null;
+      var camera_versus = versus_weapon_graph ? versus_weapon_graph.getCameraPosition() : null;
+
+      // create our graph
+      var single_weapon = document.getElementById('single_weapon');
+      single_weapon_graph = new vis.Graph3d(single_weapon, data_single, options_single);
+
+      var versus_weapon = document.getElementById('versus_weapon');
+      versus_weapon_graph = new vis.Graph3d(versus_weapon, data_versus, options_versus);
+
+      if (camera_versus) versus_weapon_graph.setCameraPosition(camera_versus); // restore camera position
+      if (camera_single) single_weapon_graph.setCameraPosition(camera_single); // restore camera position
+
+      document.getElementById('perspective').onchange = drawVisualization; // redraw graph on change
+      document.getElementById('archery_fs').onchange = drawVisualization; // redraw graph on change
+      document.getElementById('dual_fs').onchange = drawVisualization; // redraw graph on change
+      document.getElementById('scope_z').onchange = drawVisualization; // redraw graph on change
+      document.getElementById('single_weapon_type').onchange = drawVisualization; // redraw graph on change
+      document.getElementById('versus_weapon_type').onchange = drawVisualization; // redraw graph on change
+    }
+  </script>
+</head>
+
+<body onload="drawVisualization();">
+
+<p>
+  <label for="perspective">
+    <input type="checkbox" id="perspective" > Show perspective
+  </label>
+
+  <label for="archery_fs">
+    <input type="checkbox" id="archery_fs" > Archery Fighting Style 
+  </label>
+
+  <label for="dual_fs">
+    <input type="checkbox" id="dual_fs" > Dual Wielder Fighting Style 
+  </label>
+
+  <label for="scope_z">
+    <input type="checkbox" id="scope_z" checked> Limit range 
+  </label>
+</p>
+
+
+<p>
+  <label for="single_weapon_type"> Weapon type:
+    <select id="single_weapon_type">
+      <option value="daggers">dual wielding daggers</option>
+      <option value="lbow">longbow</option>
+    </select>
+  </label>
+</p>
+
+<div id="single_weapon"></div>
+
+<p>
+  <label for="versus_weapon_type"> Weapon comparison:
+    <select id="versus_weapon_type">
+      <option value="diff_dagger_lbow">difference between dual-wield daggers & longbow</option>
+    </select>
+  </label>
+</p>
+
+<div id="versus_weapon"></div>
+
+
+<div id="info"></div>
+</body>
+</html>
